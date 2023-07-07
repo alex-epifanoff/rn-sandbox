@@ -1,0 +1,72 @@
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+variables:
+  - group: React Native Variables
+  - name: scheme
+    value: 'AssetIntel'
+  - name: sdk
+    value: 'iphoneos'
+  - name: configuration
+    value: 'Release'
+  - name: CustomBuildId
+    value: $(Build.BuildId)
+
+
+trigger:
+- develop
+
+pool:
+  vmImage: 'macOS-12'
+
+steps:
+
+- bash: |
+    echo $(CustomBuildId)
+    let cbuildid="$(CustomBuildId) + 30000"
+    echo $cbuildid
+    echo "##vso[task.setvariable variable=CustomBuildId]$cbuildid"
+
+- task: ios-bundle-version@1
+  inputs:
+    sourcePath: ios/AssetIntel/Info.plist
+    versionName: '1.6.$(CustomBuildId)'
+    versionCode: '$(CustomBuildId)'
+    printFile: true
+
+- task: NodeTool@0
+  inputs:
+    versionSpec: '9.7.1'
+  displayName: 'Install Node'
+
+- script: npm install
+  displayName: 'Install dependencies'
+
+- task: CocoaPods@0
+  inputs:
+    forceRepoUpdate: true
+    projectDirectory: 'ios'
+
+- task: Xcode@5
+  inputs:
+    actions: 'build'
+    sdk: '$(sdk)'
+    scheme: '$(scheme)'
+    configuration: '$(configuration)'
+    #xcodeVersion: '13.4.1' # Options: default, 10, 9, 8, specifyPath
+    xcodeVersion: '14.0.1'
+    xcWorkspacePath: '**/AssetIntel.xcworkspace'
+    args: '-UseModernBuildSystem=0 -verbose'
+    packageApp: true    
+    signingOption: nosign    
+    #signingIdentity: '$(APPLE_CERTIFICATE_SIGNING_IDENTITY)'
+    #provisioningProfileUuid: '$(APPLE_PROV_PROFILE_UUID)'
+
+- task: CopyFiles@2
+  inputs:
+    Contents: '**/*.ipa'
+    targetFolder: '$(build.artifactStagingDirectory)'
+
+- task: PublishBuildArtifacts@1
+
